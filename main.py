@@ -30,6 +30,8 @@ request_url = credentials['request_url']
 excel_path = credentials['excel_path']
 multipleChoice_json = credentials['multipleChoice_json']
 uebungDownload_json = credentials['uebungDownload_json']
+config_json = credentials['config_json']
+url_forumUebersicht = credentials['url_forumUebersicht']
 
 def normalize_date_format(date_str):
     month_mapping = {
@@ -132,13 +134,28 @@ def scrape_postCounts(session, forum_urls):
     return week_title_counts
 
 def main():
+    with open(config_json, 'r') as file:
+        data = json.load(file)
     with requests.Session() as session:
         session.post(login_url, data={'username': username, 'password': password,
                                       'cmd[doStandardAuthentication]': authentication}, allow_redirects=True)
+        response = session.get(url_forumUebersicht)
+        soup_forumUebersicht = BeautifulSoup(response.text, 'html.parser')
+        htmlTag_forumUebersicht = soup_forumUebersicht.find_all('td', class_='std small')
+        new_links = {}
+        for td_tag in htmlTag_forumUebersicht:
+            link = td_tag.find('a')
+            if link:
+                link_href = f"{credentials['url_to_work_with']}/{link['href']}"
+                if link_href not in data['forum_urls'].values():
+                    key = str(len(data['forum_urls']) + len(new_links) + 2)
+                    new_links[key] = link_href
+        data['forum_urls'].update(new_links)
+    with open(config_json, 'w') as file:
+        json.dump(data, file, indent=4)
         for index, exercise_url in enumerate(exercise_urls, 1):
             fetch_Readers(exercise_url, session, index)
         week_counts = scrape_postCounts(session, forum_urls)
-
     calendar_weeks_only = [week[0] for week in calendar_weeks]
     book = load_workbook(excel_path)
     sheet = book.active
